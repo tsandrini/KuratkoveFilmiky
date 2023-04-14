@@ -221,9 +221,6 @@ def gimme_a_happy_movie_night_for_me_and_my_lil_happy_frens(
         raise NotImplementedError("Other dataformats not yet available.")
 
     def _prepare_movie_population(movies: MovieSeq, people: PersonSeq) -> MovieSeq:
-        if not ignore_highpriority_pref:
-            movies = copy_priority_movies(movies, people, k=3)  # TODO k
-
         if participants is not None:
             people = filter_absent_people(participants, people)
 
@@ -238,6 +235,10 @@ def gimme_a_happy_movie_night_for_me_and_my_lil_happy_frens(
             raise NotImplementedError(
                 "TODO dělej tomáši ty leňoure, dont be like this, cmon"
             )
+
+        if not ignore_highpriority_pref:
+            movies = copy_priority_movies(movies, people, k=3)  # TODO k
+
         return movies
 
     movies: MovieSeq
