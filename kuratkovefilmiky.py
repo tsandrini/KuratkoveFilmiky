@@ -154,7 +154,7 @@ def create_equivariant_multinomial_dist(population_size: int) -> List[float]:
 def create_linearly_decaying_multinomial_dist(population_size: int) -> List[float]:
     raw = [x + 1 for x in range(population_size)]
     s = sum(raw)
-    return [x / s for x in range(population_size)][::-1]
+    return [x / s for x in raw][::-1]
 
 
 def create_exponentially_decaying_multinomial_dist(population_size) -> List[float]:
