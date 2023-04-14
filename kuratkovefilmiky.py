@@ -57,11 +57,19 @@ PersonSeq = Union[List[Person], Iterable[Person]]
 
 def filter_absent_people(
     active_participants: List[str], people: PersonSeq
-) -> PersonSeq:
+) -> Iterable[Person]:
+    """
+    Filter people that are not participating from the pool using
+    a list of their names as an identificator
+    """
     return filter(lambda person: person.name in active_participants, people)
 
 
 def filter_already_seen_movies(movies: MovieSeq) -> Iterable[Movie]:
+    """
+    Filter movies that have already been watched by the bunch
+    from the pool. This is done by using the MovieState enum
+    """
     return filter(lambda movie: movie.state is not MovieState.SEEN, movies)
 
 
@@ -70,6 +78,12 @@ def copy_priority_movies(
     people: PersonSeq,
     k: int = DEFAULT_HIGHPRIORITY_COPY_NUM,
 ) -> Iterable[Movie]:
+    """
+    Modify the movie pool by copying movies that have
+    MoviePreference.PRIORITYWATCH k-times. This is basically the easiest
+    way of giving them better chances in the random pooling from a
+    frequentionist point of view.
+    """
     for movie, person in product(movies, people):
         if person.preferences[movie.name] is MoviePreference.PRIORITYWATCH:
             for _ in range(k):
@@ -79,6 +93,10 @@ def copy_priority_movies(
 
 
 def filter_unwanted_movies(movies: MovieSeq, people: PersonSeq) -> Iterable[Movie]:
+    """
+    Filter out movies that have MoviePreference.SKIP from anyone. This
+    function is usually called when you specify MovieFilteringStrategy.REMOVE
+    """
     for movie in movies:
         skip = False
         for person in people:
@@ -92,6 +110,15 @@ def filter_unwanted_movies(movies: MovieSeq, people: PersonSeq) -> Iterable[Movi
 def parse_remote_sheet_via_stdlib(
     url: str, stop_at_first_empty: bool = False, encoding: str = "utf-8"
 ) -> Tuple[List[Movie], List[Person]]:
+    """
+    Parse remote sheet using standard python libs. For the sheet download
+    and decode we use `urllib` and for parsing the document itself
+    the `csv` lib. It's not the prettiest of codes but it makes it possible
+    to run this script without installing 3rd party libs.
+
+    Note that whatever url you give, it needs to be converted to a csv parsable
+    format.
+    """
     response = urllib.request.urlopen(url)
     lines = [l.decode(encoding) for l in response.readlines()]
     cr = csv.reader(lines, quoting=csv.QUOTE_ALL)
@@ -143,15 +170,33 @@ def suggest_movies(
     num_movies: int = 1,
     proba_dist: Optional[List[float]] = None,
 ) -> List[Movie]:
+    """
+    Choose randomly `num_movies` from the movies pool. You can also
+    optionally specify a probability distribution of the given movies.
+    """
     return random.choices(movies, weights=proba_dist, k=num_movies)
 
 
 def create_equivariant_multinomial_dist(population_size: int) -> List[float]:
+    """
+    Create a discrete probability distribution that has the same probability
+    for each category.
+
+    Note that it's a PDF so the integral over the whole probability space = 1.
+    (to the accuracy of floating point arithmetics)
+    """
     p = 1 / population_size
     return [p for _ in range(population_size)]
 
 
 def create_linearly_decaying_multinomial_dist(population_size: int) -> List[float]:
+    """
+    Create a discrete probability distribution that has a linearly decaying
+    probability for each sequential category.
+
+    Note that it's a PDF so the integral over the whole probability space = 1.
+    (to the accuracy of floating point arithmetics)
+    """
     raw = [x + 1 for x in range(population_size)]
     s = sum(raw)
     return [x / s for x in raw][::-1]
