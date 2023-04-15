@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Tuple, Optional, Union, NewType, Iterable, Dict
 import csv, urllib.request
-from itertools import product
 
 HIGHPRIORITY_LIMIT: int = 5
 DEFAULT_HIGHPRIORITY_COPY_NUM: int = 3
@@ -75,7 +74,7 @@ def filter_already_seen_movies(movies: MovieSeq) -> Iterable[Movie]:
 
 def copy_priority_movies(
     movies: MovieSeq,
-    people: PersonSeq,
+    people: List[Person],
     k: int = DEFAULT_HIGHPRIORITY_COPY_NUM,
 ) -> Iterable[Movie]:
     """
@@ -84,15 +83,15 @@ def copy_priority_movies(
     way of giving them better chances in the random pooling from a
     frequentionist point of view.
     """
-    for movie, person in product(movies, people):
-        if person.preferences[movie.name] is MoviePreference.PRIORITYWATCH:
-            for _ in range(k):
-                yield movie
-            continue
+    for movie in movies:
+        for person in people:
+            if person.preferences[movie.name] is MoviePreference.PRIORITYWATCH:
+                for _ in range(k - 1):
+                    yield movie
         yield movie
 
 
-def filter_unwanted_movies(movies: MovieSeq, people: PersonSeq) -> Iterable[Movie]:
+def filter_unwanted_movies(movies: MovieSeq, people: List[Person]) -> Iterable[Movie]:
     """
     Filter out movies that have MoviePreference.SKIP from anyone. This
     function is usually called when you specify MovieFilteringStrategy.REMOVE
@@ -169,15 +168,26 @@ def suggest_movies(
     movies: List[Movie],
     num_movies: int = 1,
     proba_dist: Optional[List[float]] = None,
-) -> List[Movie]:
+) -> Iterable[Movie]:
     """
     Choose randomly `num_movies` from the movies pool. You can also
     optionally specify a probability distribution of the given movies.
     """
-    return random.choices(movies, weights=proba_dist, k=num_movies)
+    chosen: List[str] = []
+    while len(chosen) < num_movies:
+        movie = random.choices(movies, weights=proba_dist, k=1)[0]
+        if movie.name not in chosen:
+            chosen.append(movie.name)
+            yield movie
 
 
-def create_equivariant_multinomial_dist(population_size: int) -> List[float]:
+def create_equivariant_multinomial_dist(
+    population_size: int,
+    boost_categories: List[int] = [],
+    boost_coefs: List[float] = [],
+    penalize_categories: List[int] = [],
+    penalty_coefs: List[float] = [],
+) -> List[float]:
     """
     Create a discrete probability distribution that has the same probability
     for each category.
@@ -224,18 +234,21 @@ def gimme_a_happy_movie_night_for_me_and_my_lil_happy_frens(
         if participants is not None:
             people = filter_absent_people(participants, people)
 
+        # For the following code we have to enumerate the person list
+        # since the inner loops of the generators would get exhausted
+        people = list(people)
+
         if filter_already_seen:
             movies = filter_already_seen_movies(movies)
 
         # Now we create a discrete movie population
         # (freq stats yayyyyy~~~)
         if filtering_strategy is MovieFilteringStrategy.REMOVE:
-            movies = filter_unwanted_movies(movies, people)
+            movies = filter_unwanted_movies(movies, list(people))
         elif filtering_strategy is MovieFilteringStrategy.LOWER_PROBA:
             raise NotImplementedError(
                 "TODO dělej tomáši ty leňoure, dont be like this, cmon"
             )
-
         if not ignore_highpriority_pref:
             movies = copy_priority_movies(movies, people, k=3)  # TODO k
 
@@ -247,6 +260,7 @@ def gimme_a_happy_movie_night_for_me_and_my_lil_happy_frens(
     movies, people = _load_data()
 
     movies = list(_prepare_movie_population(movies, people))
+
     population_size: int = len(movies)
 
     if probability_assignment is MovieProbabilityAssignment.CONSTANT:
@@ -256,7 +270,7 @@ def gimme_a_happy_movie_night_for_me_and_my_lil_happy_frens(
     elif probability_assignment is MovieProbabilityAssignment.EXPONENTIAL_DECAY:
         proba_dist = create_exponentially_decaying_multinomial_dist(population_size)
 
-    return suggest_movies(movies, num_movies=num_movies, proba_dist=proba_dist)
+    return list(suggest_movies(movies, num_movies=num_movies, proba_dist=proba_dist))
 
 
 def cli_main():
